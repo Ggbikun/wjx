@@ -1,0 +1,13 @@
+{
+  "name": "wjx-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "问卷星自动填写脚本(基于 Playwright)",
+  "main": "fill_wjx.js",
+  "scripts": {
+    "start": "node fill_wjx.js"
+  },
+  "dependencies": {
+    "playwright": "^1.62.0"
+  }
+}

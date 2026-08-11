@@ -1,0 +1,21 @@
+{
+  "url": "file:///C:/Users/江建锋/Documents/ChatGPT/New project/wjx-automation/test/mock_survey.html",
+  "count": 20,
+  "headless": true,
+  "delay_min_ms": 10,
+  "delay_max_ms": 30,
+  "timeout_ms": 10000,
+  "random_seed": 42,
+  "screenshots_dir": "screenshots",
+  "rules": [
+    { "match": "姓名", "value": ["用户甲", "用户乙", "用户丙"] },
+    { "match": "邮箱", "value": "tester{n}@example.com" },
+    { "match": "性别", "weights": { "男": 40, "女": 60 } },
+    { "match": "爱好", "weights": { "阅读": 70, "运动": 50, "音乐": 30, "旅行": 20 } },
+    { "match": "城市", "weights": { "北京": 25, "上海": 35, "广州": 20, "深圳": 20 } },
+    { "match": "满意度", "value": "random" },
+    { "match": "喜欢的功能", "value": "random" },
+    { "match": "建议", "value": "这是一条自动化测试建议。" }
+  ],
+  "unmatched": "random"
+}

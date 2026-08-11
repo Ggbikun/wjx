@@ -1,0 +1,18 @@
+{
+  "url": "https://www.wjx.cn/vm/XXXXXXXX.aspx",
+  "headless": false,
+  "count": 10,
+  "delay_min_ms": 800,
+  "delay_max_ms": 2000,
+  "timeout_ms": 30000,
+  "random_seed": null,
+  "unmatched": "random",
+  "screenshots_dir": "screenshots",
+  "rules": [
+    { "match": "姓名", "value": ["测试用户甲", "测试用户乙", "测试用户丙"] },
+    { "match": "性别", "weights": { "男": 40, "女": 60 } },
+    { "match": ".*爱好.*", "weights": { "阅读": 60, "运动": 50, "音乐": 30, "旅行": 20 } },
+    { "match": "城市", "weights": { "北京": 25, "上海": 35, "广州": 20, "深圳": 20 } },
+    { "match": "建议|意见", "value": "这是一份自动化测试问卷,感谢设计。" }
+  ]
+}

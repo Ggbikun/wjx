@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>测试问卷(模拟问卷星结构)</title>
+  <style>
+    body { font-family: "Microsoft YaHei", sans-serif; max-width: 720px; margin: 20px auto; }
+    fieldset { border: 1px solid #ddd; border-radius: 6px; margin: 12px 0; padding: 14px; }
+    legend { font-weight: bold; padding: 0 8px; }
+    .qreq { color: #e33; font-style: normal; }
+    ul { list-style: none; padding: 0; }
+    li { margin: 6px 0; }
+    table { border-collapse: collapse; margin-top: 8px; }
+    td { border: 1px solid #eee; padding: 6px 12px; text-align: center; }
+    td:first-child { text-align: left; }
+    .btn-submit { display: inline-block; margin-top: 20px; padding: 10px 32px; background: #2d8cf0; color: #fff; border-radius: 4px; cursor: pointer; }
+    .star { cursor: pointer; font-size: 24px; color: #bbb; margin-right: 4px; }
+  </style>
+</head>
+<body>
+  <h2>测试问卷</h2>
+  <form id="form1">
+
+    <div class="fieldset" id="divquestion1">
+      <fieldset>
+        <legend><span class="qnum">1.</span><span class="qnr-question">您的姓名</span><em class="qreq">*</em></legend>
+        <div class="div_question">
+          <div class="qnr-input"><input type="text" name="q1" placeholder="请输入姓名"></div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="fieldset" id="divquestion2">
+      <fieldset>
+        <legend><span class="qnum">2.</span><span class="qnr-question">您的邮箱</span><em class="qreq">*</em></legend>
+        <div class="div_question">
+          <div class="qnr-input"><input type="email" name="q2" placeholder="请输入邮箱"></div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="fieldset" id="divquestion3">
+      <fieldset>
+        <legend><span class="qnum">3.</span><span class="qnr-question">您的性别</span><em class="qreq">*</em></legend>
+        <div class="div_question">
+          <div class="div_radio">
+            <ul class="ulradio">
+              <li><label class="radio"><input type="radio" name="q3" value="1"><span class="label">男</span></label></li>
+              <li><label class="radio"><input type="radio" name="q3" value="2"><span class="label">女</span></label></li>
+            </ul>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="fieldset" id="divquestion4">
+      <fieldset>
+        <legend><span class="qnum">4.</span><span class="qnr-question">您的爱好(多选)</span><em class="qreq">*</em></legend>
+        <div class="div_question">
+          <div class="div_checkbox">
+            <ul class="ulcheckbox">
+              <li><label class="checkbox"><input type="checkbox" name="q4" value="1"><span class="label">阅读</span></label></li>
+              <li><label class="checkbox"><input type="checkbox" name="q4" value="2"><span class="label">运动</span></label></li>
+              <li><label class="checkbox"><input type="checkbox" name="q4" value="3"><span class="label">音乐</span></label></li>
+              <li><label class="checkbox"><input type="checkbox" name="q4" value="4"><span class="label">旅行</span></label></li>
+            </ul>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="fieldset" id="divquestion5">
+      <fieldset>
+        <legend><span class="qnum">5.</span><span class="qnr-question">您所在的城市</span><em class="qreq">*</em></legend>
+        <div class="div_question">
+          <div class="div_select">
+            <select name="q5">
+              <option value="">请选择</option>
+              <option value="1">北京</option>
+              <option value="2">上海</option>
+              <option value="3">广州</option>
+              <option value="4">深圳</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="fieldset" id="divquestion6">
+      <fieldset>
+        <legend><span class="qnum">6.</span><span class="qnr-question">请对以下方面满意度打分</span><em class="qreq">*</em></legend>
+        <div class="div_question">
+          <table class="qnr-matrix">
+            <tbody>
+              <tr><td></td><td>非常不满意</td><td>不满意</td><td>一般</td><td>满意</td><td>非常满意</td></tr>
+              <tr><td>页面设计</td><td><input type="radio" name="q6_1" value="1"></td><td><input type="radio" name="q6_1" value="2"></td><td><input type="radio" name="q6_1" value="3"></td><td><input type="radio" name="q6_1" value="4"></td><td><input type="radio" name="q6_1" value="5"></td></tr>
+              <tr><td>操作便捷性</td><td><input type="radio" name="q6_2" value="1"></td><td><input type="radio" name="q6_2" value="2"></td><td><input type="radio" name="q6_2" value="3"></td><td><input type="radio" name="q6_2" value="4"></td><td><input type="radio" name="q6_2" value="5"></td></tr>
+              <tr><td>响应速度</td><td><input type="radio" name="q6_3" value="1"></td><td><input type="radio" name="q6_3" value="2"></td><td><input type="radio" name="q6_3" value="3"></td><td><input type="radio" name="q6_3" value="4"></td><td><input type="radio" name="q6_3" value="5"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="fieldset" id="divquestion7">
+      <fieldset>
+        <legend><span class="qnum">7.</span><span class="qnr-question">您喜欢的功能(矩阵多选)</span><em class="qreq">*</em></legend>
+        <div class="div_question">
+          <table class="qnr-matrix">
+            <tbody>
+              <tr><td></td><td>选项1</td><td>选项2</td><td>选项3</td></tr>
+              <tr><td>功能A</td><td><input type="checkbox" name="q7_1" value="1"></td><td><input type="checkbox" name="q7_1" value="2"></td><td><input type="checkbox" name="q7_1" value="3"></td></tr>
+              <tr><td>功能B</td><td><input type="checkbox" name="q7_2" value="1"></td><td><input type="checkbox" name="q7_2" value="2"></td><td><input type="checkbox" name="q7_2" value="3"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="fieldset" id="divquestion8">
+      <fieldset>
+        <legend><span class="qnum">8.</span><span class="qnr-question">您的建议</span></legend>
+        <div class="div_question">
+          <div class="qnr-input"><textarea name="q8" rows="3" placeholder="请输入建议"></textarea></div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="fieldset" id="divquestion9">
+      <fieldset>
+        <legend><span class="qnum">9.</span><span class="qnr-question">总体评分</span><em class="qreq">*</em></legend>
+        <div class="div_question">
+          <div class="qnr-star">
+            <span class="star" data-value="1">☆</span>
+            <span class="star" data-value="2">☆</span>
+            <span class="star" data-value="3">☆</span>
+            <span class="star" data-value="4">☆</span>
+            <span class="star" data-value="5">☆</span>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="submitbtn">
+      <a id="submit_button" class="btn-submit" href="javascript:;" onclick="doSubmit()">提交</a>
+    </div>
+  </form>
+
+  <script>
+    function doSubmit() {
+      var d = document.createElement('div');
+      d.id = 'finishMsg';
+      d.style.cssText = 'position:fixed;top:10px;left:10px;padding:20px;background:#4caf50;color:#fff;font-size:18px;z-index:9999;border-radius:6px;';
+      d.textContent = '提交成功,感谢您的参与!';
+      document.body.appendChild(d);
+    }
+  </script>
+</body>
+</html>
