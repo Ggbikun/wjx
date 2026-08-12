@@ -9,6 +9,7 @@
 - 填空题支持答案池轮换(字符串数组)
 - 批量提交(count),结束后输出每题实际分布统计
 - 只在失败/未填/调试时截图,成功默认不截图
+- 支持代理 IP 池(proxy_list/proxy_file/proxy_api),每次提交自动轮换出口 IP
 
 使用须知:
 本脚本仅适用于填写自己创建或已获授权的问卷。请勿用于伪造调查数据、
@@ -21,8 +22,12 @@ import os
 import random
 import re
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+from proxy_pool import ProxyPool, proxy_display
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -50,6 +55,16 @@ DEFAULT_CONFIG = {
     "shots_success": False,
     "debug": False,
     "stats": False,
+    "verbose": False,  # 详细日志:输出每题填写明细/代理明细(默认只输出提交结果)
+    # ---- 代理配置(默认全部关闭,直连) ----
+    "proxy": None,              # 单个代理,如 "http://user:pass@ip:port"
+    "proxy_list": [],           # 代理池(内联数组)
+    "proxy_file": "",           # 代理池(文件路径,每行一个代理,# 开头为注释)
+    "proxy_api": "",            # 代理服务商 API,每次动态提取新 IP
+    "proxy_verify": True,       # 使用前是否预验证代理连通性
+    "proxy_verify_timeout": 8,  # 预验证超时(秒)
+    "proxy_retry": 2,           # 代理失效时自动换代理重试次数
+    "threads": 1,               # 并发提交线程数(1=串行;每线程一个浏览器实例)
 }
 
 
@@ -71,9 +86,18 @@ def print_help():
   --timeout <ms>    等待提交成功的超时时间
   --seed <n>        随机种子(相同种子结果可复现)
   --shots <dir>     截图保存目录
+  --proxy-file <f>  代理列表文件(每行一个代理,覆盖配置文件的 proxy_file)
+  --threads <n>     并发提交线程数(默认 1;每线程一个浏览器实例,count 较大时显著提速)
   --debug           输出问卷结构调试信息
+  --verbose         详细日志:输出每题填写明细与代理明细(默认只输出提交结果)
   --stats           输出每题答案分布统计(默认 count>1 时自动输出)
   -h, --help        显示本帮助
+
+代理配置(在 config.json 中,优先级 proxy > proxy_list > proxy_file > proxy_api):
+  "proxy": "http://user:pass@ip:port"       单个固定代理
+  "proxy_list": ["http://ip1:port", ...]   代理池(内联)
+  "proxy_file": "proxies.txt"              代理池(文件,每行一个)
+  "proxy_api": "https://api.xxx.com/get"   代理 API(每次调用提取新 IP)
 """
     )
 
@@ -89,7 +113,10 @@ def parse_args(argv):
     p.add_argument("--timeout", type=int)
     p.add_argument("--seed", type=int)
     p.add_argument("--shots")
+    p.add_argument("--proxy-file")
+    p.add_argument("--threads", type=int)
     p.add_argument("--debug", action="store_true")
+    p.add_argument("--verbose", action="store_true")
     p.add_argument("--stats", action="store_true")
     p.add_argument("-h", "--help", action="store_true")
     args = p.parse_args(argv)
@@ -125,8 +152,14 @@ def load_config(args):
         cfg["random_seed"] = args.seed
     if args.shots:
         cfg["screenshots_dir"] = args.shots
+    if args.proxy_file:
+        cfg["proxy_file"] = args.proxy_file
+    if args.threads is not None:
+        cfg["threads"] = max(1, args.threads)
     if args.debug:
         cfg["debug"] = True
+    if args.verbose:
+        cfg["verbose"] = True
     if args.stats:
         cfg["stats"] = True
     return cfg
@@ -145,6 +178,12 @@ def shuffle(rng, arr):
 def delay(rng, cfg):
     ms = randint(rng, cfg["delay_min_ms"], cfg["delay_max_ms"])
     time.sleep(ms / 1000.0)
+
+
+def vlog(verbose, *args):
+    """详细日志:仅在 verbose 模式下输出,默认保持输出简洁"""
+    if verbose:
+        print(*args)
 
 
 # ---------------------------------------------------------------------------
@@ -825,7 +864,7 @@ def run_one(page, cfg, sub_no, rng):
         start_btn = page.get_by_text("开始作答", exact=True).first
         if start_btn.is_visible(timeout=3000):
             start_btn.click()
-            print("[信息] 已点击“开始作答”")
+            vlog(cfg.get("verbose"), "[信息] 已点击“开始作答”")
             delay(rng, cfg)
     except Exception:  # noqa: BLE001
         pass
@@ -836,7 +875,7 @@ def run_one(page, cfg, sub_no, rng):
         take_shot(page, cfg, f"debug-{sub_no}")
         return {"ok": False, "stats": {}}
     all_questions = struct["questions"]
-    print(f"[信息] 识别到 {len(all_questions)} 道题")
+    vlog(cfg.get("verbose"), f"[信息] 识别到 {len(all_questions)} 道题")
     if cfg.get("debug"):
         print(json.dumps(struct, ensure_ascii=False, indent=2))
 
@@ -876,7 +915,7 @@ def run_one(page, cfg, sub_no, rng):
             elif cfg["unmatched"] == "random":
                 value = "random"
             if value is None:
-                print(f"[{q['n']}] {q['text'] or '(无题目标题)'} -> 跳过")
+                vlog(cfg.get("verbose"), f"[{q['n']}] {q['text'] or '(无题目标题)'} -> 跳过")
                 if q.get("required"):
                     unfilled.append(q)
                 continue
@@ -884,7 +923,7 @@ def run_one(page, cfg, sub_no, rng):
                 summary, filled, chosen = fill_question(
                     page, container_selector, q, value, rng, sub_no
                 )
-                print(f"[{q['n']}] {q['text'] or '(无题目标题)'} -> {summary}")
+                vlog(cfg.get("verbose"), f"[{q['n']}] {q['text'] or '(无题目标题)'} -> {summary}")
                 if not filled:
                     unfilled.append(q)
                 else:
@@ -904,7 +943,7 @@ def run_one(page, cfg, sub_no, rng):
         if next_btn is None:
             break
         next_btn.click()
-        print("[信息] 已点击“下一页”")
+        vlog(cfg.get("verbose"), "[信息] 已点击“下一页”")
         try:
             page.wait_for_load_state("networkidle", timeout=10000)
         except Exception:  # noqa: BLE001
@@ -932,15 +971,14 @@ def run_one(page, cfg, sub_no, rng):
 
     ok = submit_survey(page, cfg, rng)
     if not ok:
-        take_shot(page, cfg, "fail")
+        take_shot(page, cfg, f"fail-{sub_no}")
         if detect_captcha(page):
             print("[提示] 页面出现验证码/滑块,请改用 --headed 模式手动完成,或稍后重试。")
         else:
             print("[警告] 未检测到提交成功提示,请查看截图确认(可能是必填题未填或页面结构变化)。")
         return {"ok": False, "stats": stats}
     if cfg.get("shots_success"):
-        take_shot(page, cfg, "success")
-    print(f"[信息] 提交成功,耗时 {time.time() - t0:.1f}s")
+        take_shot(page, cfg, f"success-{sub_no}")
     return {"ok": True, "stats": stats}
 
 
@@ -956,6 +994,89 @@ def print_distribution(all_stats, total):
         print(f"{key}.{st['text']}: {line}")
 
 
+def submit_worker(worker_id, task_ids, cfg, rng_seed, pool):
+    """工作线程:独立浏览器实例,串行处理分配到的提交任务;返回 (成功数, 统计)"""
+    # 每个线程独立的随机数生成器(基于种子+线程号),保证可复现
+    rng = random.Random(rng_seed + worker_id * 1000003)
+    tag = f"[线程{worker_id}]"
+
+    try:
+        # launch_browser 内部已启动 sync_playwright,不能在此重复 start(),
+        # 否则第二次 start() 会检测到第一个正在运行的 asyncio loop 而报错
+        pw, browser = launch_browser(cfg["headless"])
+    except Exception as e:  # noqa: BLE001
+        print(f"{tag} 启动浏览器失败: {e}")
+        return 0, {}
+
+    ok_count = 0
+    stats = {}
+    try:
+        for i in task_ids:
+            print(f"{tag} ==== 第 {i}/{cfg['count']} 次提交 ====")
+            # 每次提交取一个新代理,保证出口 IP 不同(代理池全局线程安全共享)
+            proxy = pool.next_proxy()
+            if proxy:
+                vlog(cfg.get("verbose"), f"{tag} 使用代理: {proxy_display(proxy)}")
+            elif pool.enabled:
+                print(f"{tag} [警告] 未获取到可用代理,本次尝试直连")
+
+            res = None
+            retry = int(cfg.get("proxy_retry", 0))
+            t_submit = time.time()
+            for attempt in range(retry + 1):
+                # 代理是 context 级别的,每次提交新建独立 context(新会话+新代理)
+                ctx_kwargs = dict(locale="zh-CN", viewport={"width": 1280, "height": 800})
+                if proxy:
+                    ctx_kwargs["proxy"] = proxy
+                context = browser.new_context(**ctx_kwargs)
+                page = context.new_page()
+                try:
+                    res = run_one(page, cfg, i, rng)
+                    break
+                except Exception as e:  # noqa: BLE001
+                    # 只打印异常首行,避免 Page.goto 的长堆栈刷屏
+                    detail = str(e).splitlines()[0] if str(e) else repr(e)
+                    print(f"{tag} [警告] 第 {i} 次提交异常: {detail}")
+                    if proxy:
+                        pool.mark_bad(proxy)
+                    if attempt < retry:
+                        proxy = pool.next_proxy()
+                        print(
+                            f"{tag} [信息] 更换代理重试: "
+                            f"{proxy_display(proxy) if proxy else '直连'}"
+                        )
+                        continue
+                    res = {"ok": False, "stats": {}}
+                    break
+                finally:
+                    try:
+                        context.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+
+            elapsed = time.time() - t_submit
+            if res["ok"]:
+                ok_count += 1
+                print(f"{tag} [成功] 第 {i}/{cfg['count']} 次提交成功,耗时 {elapsed:.1f}s")
+            else:
+                print(f"{tag} [失败] 第 {i}/{cfg['count']} 次提交失败,耗时 {elapsed:.1f}s(原因见上方警告或截图)")
+            for key, st in (res.get("stats") or {}).items():
+                if key not in stats:
+                    stats[key] = {"text": st["text"], "counts": {}}
+                for v, c in st["counts"].items():
+                    stats[key]["counts"][v] = stats[key]["counts"].get(v, 0) + c
+    finally:
+        try:
+            browser.close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            pw.stop()
+        except Exception:  # noqa: BLE001
+            pass
+    return ok_count, stats
+
+
 def main():
     cfg = load_config(parse_args(sys.argv[1:]))
     if not cfg["url"]:
@@ -964,39 +1085,53 @@ def main():
 
     seed = cfg["random_seed"] if cfg["random_seed"] is not None else int(time.time() * 1000) ^ 0x9E3779B9
     rng = random.Random(seed)
+    threads = max(1, int(cfg.get("threads", 1)))
 
     print(f"[信息] 问卷: {cfg['url']}")
-    print(f"[信息] 提交次数: {cfg['count']},模式: {'有头' if not cfg['headless'] else '无头'}")
+    print(f"[信息] 提交次数: {cfg['count']},模式: {'有头' if not cfg['headless'] else '无头'},线程数: {threads}")
 
-    pw, browser = launch_browser(cfg["headless"])
-    try:
-        context = browser.new_context(locale="zh-CN", viewport={"width": 1280, "height": 800})
-        page = context.new_page()
+    pool = ProxyPool(cfg, rng)
+    print(f"[信息] 代理模式: {pool.mode_desc()}")
+    if not pool.enabled and any(
+        [cfg.get("proxy"), cfg.get("proxy_list"), cfg.get("proxy_file"), cfg.get("proxy_api")]
+    ):
+        print("[警告] 检测到代理配置但未能解析出有效代理(检查格式/文件路径),本次运行使用直连。")
+    if threads > 1 and cfg["count"] < threads:
+        print(f"[警告] 提交次数({cfg['count']})小于线程数({threads}),实际有效线程为 {cfg['count']}。")
+    if threads > 1 and cfg["count"] > 1:
+        print(f"[提示] 多线程模式下每个线程独立浏览器,内存占用随线程数增长,建议 2-5 个线程。")
 
-        ok_count = 0
-        all_stats = {}
-        for i in range(1, cfg["count"] + 1):
-            print(f"\n===== 第 {i}/{cfg['count']} 次提交 =====")
-            res = run_one(page, cfg, i, rng)
-            if res["ok"]:
-                ok_count += 1
-            for key, st in (res.get("stats") or {}).items():
-                if key not in all_stats:
-                    all_stats[key] = {"text": st["text"], "counts": {}}
-                for v, c in st["counts"].items():
-                    all_stats[key]["counts"][v] = all_stats[key]["counts"].get(v, 0) + c
+    # 任务按轮询分配给各线程,保证任务数均衡
+    task_lists = [[] for _ in range(threads)]
+    for i in range(1, cfg["count"] + 1):
+        task_lists[(i - 1) % threads].append(i)
 
-        browser.close()
-        if cfg["count"] > 1 or cfg.get("stats"):
-            print_distribution(all_stats, cfg["count"])
-        print(f"\n[完成] 成功 {ok_count}/{cfg['count']} 次。")
-        if ok_count < cfg["count"]:
-            sys.exit(1)
-    finally:
-        try:
-            pw.stop()
-        except Exception:  # noqa: BLE001
-            pass
+    t0 = time.time()
+    if threads == 1:
+        results = [submit_worker(0, task_lists[0], cfg, seed, pool)]
+    else:
+        with ThreadPoolExecutor(max_workers=threads) as ex:
+            futures = [
+                ex.submit(submit_worker, w, tasks, cfg, seed, pool)
+                for w, tasks in enumerate(task_lists)
+            ]
+            results = [f.result() for f in futures]
+
+    ok_count = 0
+    all_stats = {}
+    for ok, stats in results:
+        ok_count += ok
+        for key, st in stats.items():
+            if key not in all_stats:
+                all_stats[key] = {"text": st["text"], "counts": {}}
+            for v, c in st["counts"].items():
+                all_stats[key]["counts"][v] = all_stats[key]["counts"].get(v, 0) + c
+
+    if cfg["count"] > 1 or cfg.get("stats"):
+        print_distribution(all_stats, cfg["count"])
+    print(f"\n[完成] 成功 {ok_count}/{cfg['count']} 次,总耗时 {time.time() - t0:.0f}s。")
+    if ok_count < cfg["count"]:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

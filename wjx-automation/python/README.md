@@ -13,6 +13,8 @@
 - 只在失败/未填/调试时截图,成功默认不截图(`shots_success: true` 可开启);
 - 提交前校验必填题,有未填成功的不提交,避免卡在页面校验。
 - 支持多页问卷:自动识别"下一页/下一题"按钮并逐页填写。
+- 代理 IP 池:支持单代理/代理列表/代理文件/代理 API,每次提交自动轮换出口 IP;附带 `update_proxies.py` 免费代理更新工具。
+- 多线程并发提交(`threads`,每线程独立浏览器实例),count 较大时显著提速。
 
 ## 换问卷:自动解析链接生成 config
 
@@ -85,6 +87,8 @@ python fill_wjx.py --config config.json
 --timeout <ms>    提交等待超时
 --seed <n>        随机种子
 --shots <dir>     截图目录
+--proxy-file <f>  代理列表文件(每行一个代理)
+--threads <n>     并发提交线程数(默认 1,串行)
 --debug           输出识别到的题目结构
 --stats           强制输出分布统计(count>1 时默认自动输出)
 ```
@@ -104,6 +108,22 @@ python fill_wjx.py --config config.json
   ]
 }
 ```
+
+### 代理与并发配置(可选)
+
+```jsonc
+// 代理池(四选一,优先级 proxy > proxy_list > proxy_file > proxy_api)
+"proxy": null,                          // 单个固定代理 "http://user:pass@ip:port"
+"proxy_list": [],                       // 内联代理数组
+"proxy_file": "proxies.txt",            // 代理文件(每行一个)
+"proxy_api": "",                        // 代理 API,每次动态提取新 IP
+"proxy_verify": true,                   // 使用前预验证连通性
+"proxy_verify_timeout": 8,
+"proxy_retry": 2,                       // 代理失效自动换代理重试次数
+"threads": 1                            // 并发线程数,建议 2~5
+```
+
+免费代理池刷新:先运行 `python update_proxies.py` 生成 `proxies.txt`,再运行填写脚本即可。
 
 ## 使用须知
 
